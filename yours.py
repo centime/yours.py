@@ -13,43 +13,95 @@ cwd = os.path.abspath('.')
 
 PAGE_TEMPLATE = '''
     <html>
-        <head/>
+        <head>
+            <style>%s
+            </style>
+        </head>
         <body>
-            <div id='upload'>%s
-            </div>
-            <div id='dir'>%s
+            <div class='pure-menu pure-menu-open'>%s
             </div>
         </body>
     </html>
     '''     
+STYLE = '''
+    .mtime{
+        float:right;
+    }
+    .size{
+    }
+    #current_path{
+        text-transform:none;
+        font-size:20;
+    }
 
-UPLOAD_TEPMPLATE =   '''
-                <script>function uploadSubmit(){document.getElementById("upload").submit();}</script>
-                <form id='upload' method='POST' enctype='multipart/form-data' >
-                    <input type=file name=upfile  multiple/><br>
-                    <input type=submit value=Submit />
-                </form>
+    '''+open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'pure-min.css')).read()
+
+
+UPLOAD_TEPMPLATE = '''
+                                <form id='upload_form' method='POST' enctype='multipart/form-data' style='position:absolute; top:-100px;'>
+                                    <input type='file' id='upload_files' name='upload_files' multiple/>
+                                </form>
+                                <script>
+                                    function browseFiles(){
+                                        document.getElementById('files_to_upload').value = '';
+                                        document.getElementById('upload_files').click();
+                                    }
+                                    function confirmUpload(){
+                                        document.forms['upload_form'].submit();
+                                        document.getElementById('upload_control').style.display='none';
+                                    }
+                                    function cancelUpload(){
+                                       document.getElementById('upload_files').files=[];
+                                       document.getElementById('upload_control').style.display='none';
+                                    }
+                                    document.getElementById('upload_files').onchange = function () {
+                                        document.getElementById('files_to_upload').value = '' ;
+                                        if (this.files.length > 0) {
+                                            document.getElementById('upload_control').style.display='inline';
+                                        }
+                                        for (i=0;i<this.files.length;i++) document.getElementById('files_to_upload').value += this.files[i].name+', ';
+                                    };
+                                </script>
+                                <button class='pure-button' onClick='browseFiles()'>Upload from hard drive</button>
+                                <span id='upload_control' style='display:none;'>
+                                    <input id='files_to_upload' readonly></input>
+                                    <button class='pure-button' onClick='confirmUpload()'>Ok</button>
+                                    <button class='pure-button' onClick='cancelUpload()'>Cancel</button>
+                                </span>
     '''
 
 DIR_TEMPLATE = '''
-                <ul id='dir_elements'>%s
+                <div class='pure-menu-heading'>
+                    <a id='current_path'>%s</a>
+                    <div class='pure-menu pure-menu-horizontal pure-menu-open'>
+                        <ul>
+                            <li><a href='%s' class='pure-button'> < </a></li>
+                            <li >%s
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <ul>
+                    <a class="pure-menu-heading"><span class='name'>[ name ]</span> <span class='size inner_elements'>[ size / inner elements ]</span> <span class='mtime'>[ last modified ]</span></a>
+                    %s
                 </ul>
     '''
 
 SUBDIR_TEMPLATE = '''
-                    <li><a href='%s'>[ %s ]</a> %s </li>
+                    <li><a href='%s'>[ %s ] <span class='inner_elements'>%s</span> <span class='mtime'>%s</span> </a></li>
     '''
 
 FILE_TEMPLATE = '''
-                    <li><a href='%s'>%s</a> %s %s </li>
+                    <li><a href='%s'>%s <span class='size'>%s</span> <span class='mtime'>%s</span></a></li>
     '''
 
-def render(subdirs, files):  
-    subdirs = ''.join([ (SUBDIR_TEMPLATE % (d['path'], d['name'], d['mtime'] )) for d in subdirs ])
-    files = ''.join([ (FILE_TEMPLATE % (f['path'], f['name'], f['size'], f['mtime'] )) for f in files ])
+def render(path, subdirs, files):  
+    subdirs = ''.join([ (SUBDIR_TEMPLATE % (path+'/'+d['name'], d['name'], d['inner_elements'], d['mtime'] )) for d in subdirs ])
+    #subdirs = ''.join([ (SUBDIR_TEMPLATE % (path, d['name'], d['mtime'] )) for d in subdirs ])
+    files = ''.join([ (FILE_TEMPLATE % (path+'/'+f['name'], f['name'], f['size'], f['mtime'] )) for f in files ])
     
-    directory = DIR_TEMPLATE % ( subdirs + files )
-    page = PAGE_TEMPLATE % ( UPLOAD_TEPMPLATE, directory )
+    directory = DIR_TEMPLATE % (path, path+'/..', UPLOAD_TEPMPLATE, subdirs+files)
+    page = PAGE_TEMPLATE % ( STYLE, directory )
     return page
 
 def sizeof(num):
@@ -102,10 +154,10 @@ class YoursHandler(BaseHTTPRequestHandler):
 
             else: raise Exception("Unexpected POST request")
             
-            if type(field_storage['upfile']) == type([]):
-                files = field_storage['upfile']
+            if type(field_storage['upload_files']) == type([]):
+                files = field_storage['upload_files']
             else :
-                files = [field_storage['upfile']]
+                files = [field_storage['upload_files']]
 
             for file_in in files :
                 name = os.path.split(file_in.filename)[1]
@@ -115,7 +167,7 @@ class YoursHandler(BaseHTTPRequestHandler):
                 # 'version control'
                 if os.path.exists( file_out ):
                     # FIX IT (windows ?)
-                    versions_dir =  cwd+'/_yours_versions_'+path.split(cwd)[1]
+                    versions_dir =  cwd+'/.yours_versions.'+path.split(cwd)[1]
                     if not os.path.exists(versions_dir):
                         os.makedirs(versions_dir) 
                     i = 0
@@ -137,12 +189,21 @@ class YoursHandler(BaseHTTPRequestHandler):
             self.send_page(path)
 
         except Exception as e:
-            # pass
             print e
             self.send_error(404,'POST to "%s" failed: %s' % (self.path, str(e)) )
 
+    def url_from_path(self, path):
+
+        rel_path = path.split(cwd)[1]
+        identifiers = [ i for i in rel_path.split('/') if i != '' ]
+        if len(identifiers)  > 0 :
+            url = '/'+'/'.join(identifiers)
+        else : url = '/'.join(identifiers)
+        return url
+
+
     def send_page(self, path):
-        # Shame on me for theses two functions, but getsize and getmtime sometimes crash... ex : on a empty file (touch)
+        # Forever ashamed, but getsize and getmtime sometime crash... ex : on a empty file (touch)
         def try_size(n):
             try :
                 r = sizeof(os.path.getsize(n))
@@ -155,25 +216,26 @@ class YoursHandler(BaseHTTPRequestHandler):
             except :
                 r = 0
             return r
-        q=self.path.split('/')
-        r=q[len(q)-1]
 
+        def inner_elements(n):
+            for (p, d, f) in os.walk(n) :
+                return len(d)+len(f)  
+        
         for (p, d, f) in os.walk(path) :
             # what's in it ?
             subdirs = [ {
                 'name': n, 
-                'path': r+'/'+n,
+                'inner_elements': inner_elements(os.path.join(p,n)),
                 'mtime': try_mtime(n)
                  } for n in d ] 
             files = [ {
                 'name': n,
-                'path': r+'/'+n,
                 'size': try_size(n),
                 'mtime': try_mtime(n)
                 } for n in f ]
             break
 
-        page = render( subdirs, files)
+        page = render( self.url_from_path(path), subdirs, files)
         self.send_response(200)
         self.send_header('Content-type','text/html')
         self.end_headers()
@@ -187,7 +249,7 @@ def main():
         print 'serving %s on port %s...' % (cwd,port)
         yours.serve_forever()
     except KeyboardInterrupt:
-        print 'Keyboard interrupt, closing.'
+        print '\nKeyboard interrupt, closing.'
         yours.socket.close()
 
 if __name__ == '__main__':
