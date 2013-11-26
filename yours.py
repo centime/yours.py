@@ -23,18 +23,26 @@ PAGE_TEMPLATE = '''
         </body>
     </html>
     '''     
-STYLE = '''
+STYLE = open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'pure-min.css')).read()+'''
+    
+    .size{
+        float:right;
+    }
     .mtime{
         float:right;
     }
-    .size{
+    .subdir{
+        font-weight : bold;
+    }
+    .pure-menu a, .pure-menu .pure-menu-heading{
+        white-space:normal;
     }
     #current_path{
         text-transform:none;
         font-size:20;
     }
 
-    '''+open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'pure-min.css')).read()
+    '''
 
 
 UPLOAD_TEPMPLATE = '''
@@ -75,24 +83,36 @@ DIR_TEMPLATE = '''
                     <a id='current_path'>%s</a>
                     <div class='pure-menu pure-menu-horizontal pure-menu-open'>
                         <ul>
-                            <li><a href='%s' class='pure-button'> < </a></li>
-                            <li >%s
+                            <li><!-- parent directory --> <a href='%s' class='pure-button'> < </a></li>
+                            <li><!-- upload --> %s
                             </li>
                         </ul>
                     </div>
                 </div>
                 <ul>
-                    <a class="pure-menu-heading"><span class='name'>[ name ]</span> <span class='size inner_elements'>[ size / inner elements ]</span> <span class='mtime'>[ last modified ]</span></a>
-                    %s
+                    <a class="pure-menu-heading">
+                        <span class='name'>[ name ]</span>
+                        <span class='size'>[ size ]</span>
+                        <!--<span class='mtime'>[ last modified ]</span>-->
+                    </a>
+                    <!-- directories and files --> %s
                 </ul>
     '''
 
 SUBDIR_TEMPLATE = '''
-                    <li><a href='%s'>[ %s ] <span class='inner_elements'>%s</span> <span class='mtime'>%s</span> </a></li>
+                    <li><a href='%s'> 
+                        <span class='subdir'>%s</span>
+                        <span class='size inner_elements'>%s</span> 
+                        <!--<span class='mtime'>%s</span>-->
+                    </a></li>
     '''
 
 FILE_TEMPLATE = '''
-                    <li><a href='%s'>%s <span class='size'>%s</span> <span class='mtime'>%s</span></a></li>
+                    <li><a href='%s'>
+                        %s 
+                        <span class='size'>%s</span> 
+                        <!--<span class='mtime'>%s</span>-->
+                    </a></li>
     '''
 
 def render(path, subdirs, files):  
@@ -227,12 +247,12 @@ class YoursHandler(BaseHTTPRequestHandler):
                 'name': n, 
                 'inner_elements': inner_elements(os.path.join(p,n)),
                 'mtime': try_mtime(n)
-                 } for n in d ] 
+                 } for n in sorted(d) ] 
             files = [ {
                 'name': n,
                 'size': try_size(n),
                 'mtime': try_mtime(n)
-                } for n in f ]
+                } for n in sorted(f) ]
             break
 
         page = render( self.url_from_path(path), subdirs, files)
