@@ -8,15 +8,16 @@ But not everyone has signed for [ Dropbox, Google Docs, Github, whatever ], and 
 
 Looks like a quick and dirty file-sharing python http server could save the day.
 
+__________________________________________________________________
+
 Implemented untested features :
-==============================
 * navigation through directories
 * download of single files
 * upload of multiple files
 * simili version management (files already there are moved and renamed before writing the uploaded file)
+__________________________________________________________________
 
 Required features :
-===================
 * design
 * security audit
 * tests
