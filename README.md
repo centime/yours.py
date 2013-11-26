@@ -20,6 +20,7 @@ Required features :
 * design
 * security audit
 * tests
+* get params from cli
 * new directory
 * download multiple files / directories (automatic compression)
 * windows compatibility
