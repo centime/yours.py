@@ -6,6 +6,7 @@ from urlparse import urlparse
 import os
 import datetime
 import cgi
+import socket
 
 port = 3333    
 cwd = os.path.abspath('.')
@@ -36,6 +37,10 @@ STYLE = open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'pure-min.
     }
     .pure-menu a, .pure-menu .pure-menu-heading{
         white-space:normal;
+    }
+    .select_cb{
+        float : left;
+        margin : 10px;
     }
     #current_path{
         text-transform:none;
@@ -70,21 +75,24 @@ UPLOAD_TEPMPLATE = '''
                                         for (i=0;i<this.files.length;i++) document.getElementById('files_to_upload').value += this.files[i].name+', ';
                                     };
                                 </script>
-                                <button class='pure-button' onClick='browseFiles()'>Upload from hard drive</button>
+                                <button class='pure-button' onClick='browseFiles()'>Upload</button>
                                 <span id='upload_control' style='display:none;'>
                                     <input id='files_to_upload' readonly></input>
                                     <button class='pure-button' onClick='confirmUpload()'>Ok</button>
                                     <button class='pure-button' onClick='cancelUpload()'>Cancel</button>
                                 </span>
+                                <script>document.getElementById('files_to_upload').value = '' ;</script>
     '''
 
-DIR_TEMPLATE = '''
+VIEW_TEMPLATE = '''
                 <div class='pure-menu-heading'>
                     <a id='current_path'>%s</a>
                     <div class='pure-menu pure-menu-horizontal pure-menu-open'>
                         <ul>
                             <li><!-- parent directory --> <a href='%s' class='pure-button'> < </a></li>
+                            <button class='pure-button' onClick='document.forms["download_form"].submit();'>Download</button>
                             <li><!-- upload --> %s
+                            
                             </li>
                         </ul>
                     </div>
@@ -95,41 +103,42 @@ DIR_TEMPLATE = '''
                         <span class='size'>[ size ]</span>
                         <!--<span class='mtime'>[ last modified ]</span>-->
                     </a>
-                    <!-- directories and files --> %s
+                    <form id='download_form' method='POST'>
+                        <!-- directories and files --> %s
+                    </form>
                 </ul>
     '''
 
 SUBDIR_TEMPLATE = '''
-                    <li><a href='%s'> 
-                        <span class='subdir'>%s</span>
-                        <span class='size inner_elements'>%s</span> 
-                        <!--<span class='mtime'>%s</span>-->
-                    </a></li>
+                    <li>
+                        <input type='checkbox' class='select_cb' name='%s'></input>
+                        <a href='%s'> 
+                            <span class='subdir'>%s</span>
+                            <span class='size inner_elements'>%s</span> 
+                            <!--<span class='mtime'>%s</span>-->
+                        </a>
+
+                    </li>
     '''
 
 FILE_TEMPLATE = '''
-                    <li><a href='%s'>
-                        %s 
-                        <span class='size'>%s</span> 
-                        <!--<span class='mtime'>%s</span>-->
-                    </a></li>
+                    <li>
+                        <input type='checkbox' class='select_cb' name='%s'></input>
+                        <a href='%s'>
+                            %s 
+                            <span class='size'>%s</span> 
+                            <!--<span class='mtime'>%s</span>-->
+                        </a>
+                    </li>
     '''
 
 def render(path, subdirs, files):  
-    subdirs = ''.join([ (SUBDIR_TEMPLATE % (path+'/'+d['name'], d['name'], d['inner_elements'], d['mtime'] )) for d in subdirs ])
-    #subdirs = ''.join([ (SUBDIR_TEMPLATE % (path, d['name'], d['mtime'] )) for d in subdirs ])
-    files = ''.join([ (FILE_TEMPLATE % (path+'/'+f['name'], f['name'], f['size'], f['mtime'] )) for f in files ])
+    subdirs = ''.join([ (SUBDIR_TEMPLATE % (path+'/'+d['name'],path+'/'+d['name'], d['name'], d['inner_elements'], d['mtime'] )) for d in subdirs ])
+    files = ''.join([ (FILE_TEMPLATE % (path+'/'+f['name'],path+'/'+f['name'], f['name'], f['size'], f['mtime'] )) for f in files ])
     
-    directory = DIR_TEMPLATE % (path, path+'/..', UPLOAD_TEPMPLATE, subdirs+files)
+    directory = VIEW_TEMPLATE % (path, path+'/..', UPLOAD_TEPMPLATE, subdirs+files)
     page = PAGE_TEMPLATE % ( STYLE, directory )
     return page
-
-def sizeof(num):
-    for x in ['bytes','KB','MB','GB']:
-        if num < 1024.0:
-            return "%3.1f%s" % (num, x)
-        num /= 1024.0
-    return "%3.1f%s" % (num, 'TB')
 
 class YoursHandler(BaseHTTPRequestHandler):
     def path_from_url(self) :
@@ -169,11 +178,17 @@ class YoursHandler(BaseHTTPRequestHandler):
         try:
             ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))     
 
+            '''
             if ctype == 'multipart/form-data' :     
                 field_storage = cgi.FieldStorage( fp = self.rfile, headers = self.headers, environ={ 'REQUEST_METHOD':'POST' } )
 
             else: raise Exception("Unexpected POST request")
-            
+'''
+
+            field_storage = cgi.FieldStorage( fp = self.rfile, headers = self.headers, environ={ 'REQUEST_METHOD':'POST' } )
+
+            print field_storage
+
             if type(field_storage['upload_files']) == type([]):
                 files = field_storage['upload_files']
             else :
@@ -223,6 +238,13 @@ class YoursHandler(BaseHTTPRequestHandler):
 
 
     def send_page(self, path):
+        def sizeof(num):
+            for x in ['bytes','KB','MB','GB']:
+                if num < 1024.0:
+                    return "%3.1f%s" % (num, x)
+                num /= 1024.0
+            return "%3.1f%s" % (num, 'TB')
+
         # Forever ashamed, but getsize and getmtime sometime crash... ex : on a empty file (touch)
         def try_size(n):
             try :
@@ -266,7 +288,7 @@ def main():
     try:
         yours = HTTPServer(('', port), YoursHandler)
         print 'Hi, i\'m yours,'
-        print 'serving %s on port %s...' % (cwd,port)
+        print 'serving %s on %s:%s ...' % (cwd, socket.gethostbyname(socket.gethostname()), port)
         yours.serve_forever()
     except KeyboardInterrupt:
         print '\nKeyboard interrupt, closing.'
