@@ -15,15 +15,16 @@ Implemented untested features :
 * download of single files
 * upload of multiple files
 * simili version management (files already there are moved and renamed before writing the uploaded file)
+* design
+* ~download multiple files / directories (automatic compression)
 __________________________________________________________________
 
 Required features :
-* design
+* download multiple files / directories (automatic compression)
 * security audit
 * tests
 * get params from cli
 * new directory
-* download multiple files / directories (automatic compression)
 * windows compatibility
 
 
